@@ -9,4 +9,6 @@
     "iot_class": "cloud_polling",
     "config_flow": true,
     "integration_type": "hub",
-    "supported_platforms": ["switch", "light"] }  
+    "supported_platforms": ["switch", "light"] 
+    "issue_tracker": "https://github.com/guillaumeseur/hafele_connect_mesh"
+}  
