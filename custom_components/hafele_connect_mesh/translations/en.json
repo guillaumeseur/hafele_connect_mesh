@@ -1,0 +1,19 @@
+{
+    "config": {
+      "step": {
+        "user": {
+          "description": "Please enter your Häfele Connect Mesh API key."
+        },
+        "select_network": {
+          "description": "Found networks: {networks}. If no networks are found, make sure everything is correctly set up in the Connect Mesh app."
+        }
+      },
+      "error": {
+        "cannot_connect": "Failed to connect. Please check your API key and try again.",
+        "no_networks": "No networks found. Make sure everything is correctly set up in the Connect Mesh app.",
+        "no_network_selected": "No network selected",
+        "unknown": "An unknown error occurred"
+      }
+    }
+  }
+  
