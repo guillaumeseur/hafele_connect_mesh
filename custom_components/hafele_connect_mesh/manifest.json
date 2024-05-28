@@ -1,14 +1,10 @@
 {
-    "domain": "hafele_connect_mesh",
-    "name": "Häfele Connect Mesh",
-    "version": "1.0.0",
-    "documentation": "https://github.com/guillaumeseur/hafele_connect_mesh",
-    "requirements": [],
-    "dependencies": [],
-    "codeowners": ["@guillaumeseur"],
-    "iot_class": "cloud_polling",
-    "config_flow": true,
-    "integration_type": "hub",
-    "supported_platforms": ["switch", "light"] 
-    "issue_tracker": "https://github.com/guillaumeseur/hafele_connect_mesh/issues"
-}  
+  "domain": "hafele_connect_mesh",
+  "name": "Häfele Connect Mesh",
+  "version": "1.0.0",
+  "documentation": "https://github.com/guillaumeseur/hafele_connect_mesh",
+  "requirements": [],
+  "dependencies": [],
+  "codeowners": ["@guillaumeseur"],
+  "config_flow": true
+}
