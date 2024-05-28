@@ -4,5 +4,6 @@
     "version": "1.0.0",
     "documentation": "https://github.com/guillaumeseur/hafele_connect_mesh",
     "codeowners": ["@guillaumeseur"],
+    "authors": ["@guillaumeseur"],
     "config_flow": true
 }
