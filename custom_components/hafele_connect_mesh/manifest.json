@@ -5,7 +5,7 @@
     "documentation": "https://github.com/guillaumeseur/hafele_connect_mesh",
     "requirements": [],
     "dependencies": [],
-    "codeowners": "@guillaumeseur",
+    "codeowners": ["@guillaumeseur"],
     "iot_class": "cloud_polling",
     "config_flow": true,
     "integration_type": "hub",
