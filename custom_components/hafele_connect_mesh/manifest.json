@@ -3,8 +3,6 @@
   "name": "Häfele Connect Mesh",
   "version": "1.0.0",
   "documentation": "https://github.com/guillaumeseur/hafele_connect_mesh",
-  "requirements": [],
-  "dependencies": [],
   "codeowners": ["@guillaumeseur"],
   "config_flow": true
 }
