@@ -1,7 +1,7 @@
 {
   "name": "Häfele Connect Mesh",
   "content_in_root": false,
-  "domains": ["light", "switch"],
+  "domains": "hafele_connect_mesh",
   "country": "BE",
   "homeassistant": "2024.5.5",
   "render_readme": true,
