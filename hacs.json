@@ -1,9 +1,7 @@
 {
   "name": "Häfele Connect Mesh",
-  "content_in_root": false,
-  "domains": "hafele_connect_mesh",
   "country": "BE",
   "homeassistant": "2024.5.5",
+  "hide_default_branch": true,
   "render_readme": true,
-  "zip_release": false
 }
