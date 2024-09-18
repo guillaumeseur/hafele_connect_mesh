@@ -1,156 +1,179 @@
-import requests
+"""Config flow for Häfele Connect Mesh integration."""
+from __future__ import annotations
+
 import voluptuous as vol
-import logging
 from homeassistant import config_entries
-from homeassistant.core import callback
-from homeassistant.helpers import config_validation as cv
+from homeassistant.core import HomeAssistant
+from homeassistant.data_entry_flow import FlowResult
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+import aiohttp
 
 from .const import DOMAIN
 
-_LOGGER = logging.getLogger(__name__)
+STEP_USER_DATA_SCHEMA = vol.Schema(
+    {
+        vol.Required("api_token"): str,
+    }
+)
 
-@callback
-def configured_instances(hass):
-    return set(entry.data.get("name") for entry in hass.config_entries.async_entries(DOMAIN))
+class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Handle a config flow for Häfele Connect Mesh."""
 
-class HafeleConnectMeshConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    VERSION = 1
-    CONNECTION_CLASS = config_entries.CONN_CLASS_CLOUD_POLL
+    VERSION = 2
+    
+    def __init__(self):
+        """Initialize the config flow."""
+        self.api_token = None
+        self.networks = None
+        self.selected_network_id = None
+        self.devices = None
 
-    async def async_step_user(self, user_input=None):
+    async def async_step_user(self, user_input=None) -> FlowResult:
+        """Handle the initial step."""
+        errors = {}
+        
+        # Check for existing entries
+        existing_entry = next((entry for entry in self._async_current_entries() if entry.domain == DOMAIN), None)
+        if existing_entry:
+            return await self.async_step_reauth(user_input)
+
+        if user_input is not None:
+            self.api_token = user_input["api_token"]
+            return await self.async_step_select_network()
+
+        return self.async_show_form(
+            step_id="user", 
+            data_schema=STEP_USER_DATA_SCHEMA, 
+            errors=errors,
+            description_placeholders={
+                "setup_info": "For more information and setup guide, visit: https://github.com/guillaumeseur/hafele_connect_mesh\n\nPlease obtain your API key from: https://cloud.connect-mesh.io/developer"
+            }
+        )
+
+    async def async_step_reauth(self, user_input=None) -> FlowResult:
+        """Handle reauthorization."""
+        if user_input is not None:
+            existing_entry = next((entry for entry in self._async_current_entries() if entry.domain == DOMAIN), None)
+            if existing_entry:
+                self.hass.config_entries.async_update_entry(existing_entry, data=user_input)
+                await self.hass.config_entries.async_reload(existing_entry.entry_id)
+                return self.async_abort(reason="reauth_successful")
+
+        return self.async_show_form(
+            step_id="reauth",
+            data_schema=STEP_USER_DATA_SCHEMA,
+            description_placeholders={
+                "setup_info": "Please re-enter your API token to update your existing configuration."
+            }
+        )
+
+    async def async_step_select_network(self, user_input=None) -> FlowResult:
+        """Handle network selection."""
         errors = {}
         if user_input is not None:
-            self.api_key = user_input["api_key"]
-            return await self.async_step_networks()
-        
-        schema = vol.Schema({
-            vol.Required("api_key"): str
+            self.selected_network_id = user_input["network"]
+            return await self.async_step_process_devices()
+
+        if self.networks is None:
+            self.networks = await self._fetch_networks()
+
+        if not self.networks:
+            return self.async_abort(reason="no_networks")
+
+        network_schema = vol.Schema({
+            vol.Required("network"): vol.In({net["id"]: net["name"] for net in self.networks})
         })
 
         return self.async_show_form(
-            step_id="user",
-            data_schema=schema,
-            errors=errors
+            step_id="select_network",
+            data_schema=network_schema,
+            errors=errors,
+            description_placeholders={
+                "select_info": "Please select one network to add to Home Assistant."
+            }
         )
 
-    async def async_step_networks(self, user_input=None):
-        errors = {}
-        headers = {
-            'accept': '*/*',
-            'Authorization': f'Bearer {self.api_key}'
-        }
+    async def async_step_process_devices(self, user_input=None) -> FlowResult:
+        """Process devices for the selected network."""
+        if self.devices is None:
+            self.devices = await self._fetch_devices()
+            self.devices = [device for device in self.devices if device["networkId"] == self.selected_network_id]
 
-        def get_networks():
-            try:
-                _LOGGER.debug("Trying to connect to the API with the provided API key")
-                response = requests.get('https://cloud.connect-mesh.io/api/core/networks', headers=headers)
-                response.raise_for_status()
-                return response.json()
-            except requests.exceptions.RequestException as req_err:
-                _LOGGER.error("Request exception occurred: %s", req_err)
-                raise
-
-        try:
-            networks = await self.hass.async_add_executor_job(get_networks)
-            _LOGGER.debug("API response received: %s", networks)
-
-            if not networks:
-                _LOGGER.warning("No networks found")
-                return self.async_show_form(
-                    step_id="user",
-                    data_schema=vol.Schema({vol.Required("api_key"): str}),
-                    errors={"base": "no_networks"},
-                    description_placeholders={"networks": ""}
-                )
-
-            self.networks = {network["id"]: network["name"] for network in networks}
-            network_options = {network["id"]: network["name"] for network in networks}
-
-            schema = vol.Schema({
-                vol.Required("network"): vol.In(network_options)
+        processed_devices = []
+        for device in self.devices:
+            status = await self._fetch_device_status(device["uniqueId"])
+            device_type = self._determine_device_type(status)
+            processed_devices.append({
+                "uniqueId": device["uniqueId"],
+                "name": device["name"],
+                "type": device_type
             })
 
-            return self.async_show_form(
-                step_id="select_network",
-                data_schema=schema,
-                description_placeholders={"networks": ", ".join(network_options.values())},
-            )
-
-        except requests.exceptions.RequestException:
-            errors["base"] = "cannot_connect"
-        except Exception as err:
-            _LOGGER.error("Unexpected error occurred: %s", err)
-            errors["base"] = "unknown"
-
-        return self.async_show_form(
-            step_id="user",
-            data_schema=vol.Schema({vol.Required("api_key"): str}),
-            errors=errors
+        # Create the config entry
+        return self.async_create_entry(
+            title="Häfele Connect Mesh",
+            data={
+                "api_token": self.api_token,
+                "network_id": self.selected_network_id,
+                "devices": processed_devices
+            }
         )
 
-    async def async_step_select_network(self, user_input=None):
-        if user_input is not None:
-            self.network_id = user_input["network"]
-            self.network_name = self.networks[self.network_id]
-            return await self.async_step_devices()
-        
-        return self.async_abort(reason="no_network_selected")
-
-    async def async_step_devices(self, user_input=None):
-        errors = {}
+    async def _fetch_networks(self):
+        """Fetch networks from the API."""
+        session = async_get_clientsession(self.hass)
         headers = {
-            'accept': 'application/json',
-            'Authorization': f'Bearer {self.api_key}'
+            "accept": "*/*",
+            "Authorization": f"Bearer {self.api_token}"
         }
-
-        def get_devices():
-            try:
-                _LOGGER.debug("Trying to get devices for the network: %s", self.network_name)
-                response = requests.get('https://cloud.connect-mesh.io/api/core/devices', headers=headers)
-                response.raise_for_status()
-                return response.json()
-            except requests.exceptions.RequestException as req_err:
-                _LOGGER.error("Request exception occurred: %s", req_err)
-                raise
-
         try:
-            devices = await self.hass.async_add_executor_job(get_devices)
-            _LOGGER.debug("API response for devices: %s", devices)
+            async with session.get("https://cloud.connect-mesh.io/api/core/networks", headers=headers) as response:
+                if response.status == 200:
+                    return await response.json()
+                else:
+                    return None
+        except aiohttp.ClientError:
+            return None
 
-            self.devices = [device for device in devices if device['networkId'] == self.network_id]
-            _LOGGER.debug("Filtered devices: %s", self.devices)
+    async def _fetch_devices(self):
+        """Fetch devices from the API."""
+        session = async_get_clientsession(self.hass)
+        headers = {
+            "accept": "application/json",
+            "Authorization": f"Bearer {self.api_token}"
+        }
+        try:
+            async with session.get("https://cloud.connect-mesh.io/api/core/devices", headers=headers) as response:
+                if response.status == 200:
+                    return await response.json()
+                else:
+                    return None
+        except aiohttp.ClientError:
+            return None
 
-            if not self.devices:
-                _LOGGER.warning("No devices found for the selected network")
-                return self.async_show_form(
-                    step_id="select_network",
-                    data_schema=vol.Schema({
-                        vol.Required("network"): vol.In({network_id: name for network_id, name in self.networks.items()})
-                    }),
-                    errors={"base": "no_devices"},
-                    description_placeholders={"networks": self.network_name}
-                )
+    async def _fetch_device_status(self, unique_id):
+        """Fetch status for a specific device."""
+        session = async_get_clientsession(self.hass)
+        headers = {
+            "accept": "*/*",
+            "Authorization": f"Bearer {self.api_token}"
+        }
+        try:
+            async with session.get(f"https://cloud.connect-mesh.io/api/core/devices/{unique_id}/status", headers=headers) as response:
+                if response.status == 200:
+                    return await response.json()
+                else:
+                    return None
+        except aiohttp.ClientError:
+            return None
 
-            return self.async_create_entry(
-                title=self.network_name,
-                data={
-                    "api_key": self.api_key,
-                    "network_id": self.network_id,
-                    "devices": self.devices
-                }
-            )
-
-        except requests.exceptions.RequestException:
-            errors["base"] = "cannot_connect"
-        except Exception as err:
-            _LOGGER.error("Unexpected error occurred: %s", err)
-            errors["base"] = "unknown"
-
-        return self.async_show_form(
-            step_id="select_network",
-            data_schema=vol.Schema({
-                vol.Required("network"): vol.In({network_id: name for network_id, name in self.networks.items()})
-            }),
-            errors=errors,
-            description_placeholders={"networks": self.network_name}
-        )
+    def _determine_device_type(self, status):
+        """Determine the device type based on its status."""
+        if status.get("abstraction") == "Multiwhite":
+            return "temperature"
+        elif status.get("abstraction") == "RGB":
+            return "rgb"
+        elif status.get("abstraction") == "Light":
+            return "brightness"
+        else:
+            return "switch"
