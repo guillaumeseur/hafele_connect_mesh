@@ -1,6 +1,7 @@
 """Config flow for Häfele Connect Mesh integration."""
 from __future__ import annotations
 
+import logging
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
@@ -9,6 +10,8 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import aiohttp
 
 from .const import DOMAIN
+
+_LOGGER = logging.getLogger(__name__)
 
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
@@ -131,8 +134,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if response.status == 200:
                     return await response.json()
                 else:
+                    _LOGGER.error(f"Failed to fetch networks. Status code: {response.status}")
                     return None
-        except aiohttp.ClientError:
+        except aiohttp.ClientError as e:
+            _LOGGER.error(f"Error fetching networks: {e}")
             return None
 
     async def _fetch_devices(self):
@@ -147,8 +152,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if response.status == 200:
                     return await response.json()
                 else:
+                    _LOGGER.error(f"Failed to fetch devices. Status code: {response.status}")
                     return None
-        except aiohttp.ClientError:
+        except aiohttp.ClientError as e:
+            _LOGGER.error(f"Error fetching devices: {e}")
             return None
 
     async def _fetch_device_status(self, unique_id):
@@ -163,17 +170,24 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if response.status == 200:
                     return await response.json()
                 else:
+                    _LOGGER.error(f"Failed to fetch device status for {unique_id}. Status code: {response.status}")
                     return None
-        except aiohttp.ClientError:
+        except aiohttp.ClientError as e:
+            _LOGGER.error(f"Error fetching device status for {unique_id}: {e}")
             return None
 
     def _determine_device_type(self, status):
         """Determine the device type based on its status."""
-        if status.get("abstraction") == "Multiwhite":
+        if status is None:
+            _LOGGER.warning("Device status is None, defaulting to 'switch' type")
+            return "switch"
+        
+        abstraction = status.get("abstraction")
+        if abstraction == "Multiwhite":
             return "temperature"
-        elif status.get("abstraction") == "RGB":
+        elif abstraction == "RGB":
             return "rgb"
-        elif status.get("abstraction") == "Light":
+        elif abstraction == "Light":
             return "brightness"
         else:
             return "switch"
