@@ -1,7 +1,7 @@
 {
     "domain": "hafele_connect_mesh",
     "name": "Häfele Connect Mesh",
-    "version": "2.0.0",
+    "version": "2.0.1",
     "documentation": "https://github.com/guillaumeseur/hafele_connect_mesh",
     "requirements": [],
     "codeowners": ["@guillaumeseur"],
