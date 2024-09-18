@@ -32,6 +32,14 @@ Most users will have already completed this step. If you haven't, or if you enco
 4. **Ensure Other Devices Are Connected:**
    - Make sure you have other devices connected that you will need to control through Home Assistant.
 
+5. **Upload App Configuration to Cloud:**
+
+   After making any changes in the app or completing the first setup:
+   
+   1. Change to 'Control mode' in the app.
+   2. Navigate to Gateway > Cloud settings > Synced networks.
+   3. Click on the network upload button to sync your configuration with the cloud.
+
 ### Troubleshooting
 
 - **Lights on the Gateway:**
@@ -39,7 +47,6 @@ Most users will have already completed this step. If you haven't, or if you enco
     - Reset the gateway device with the physical button and try again.
   - Internet flickering: Not connected to the internet.
     - Check if the cable works and you are signed into an account on the app.
-
 
 ### Step 2: Create an API Token
 
@@ -51,12 +58,10 @@ Most users will have already completed this step. If you haven't, or if you enco
    - Click on SET before creating the token.
    - Example token: `CMC_ab12cd34_ef56gh78ij90kl12mn34op56qr78st90uv12wx34yz56ab78cd90ef12`.
 
-
 ### Step 3: Add Custom Repository in HACS
 
 1. In Home Assistant Community Store (HACS), add this custom repository.
 2. Install Häfele Connect Mesh.
-
 
 ### Step 4: Add the Integration
 
@@ -66,12 +71,10 @@ Most users will have already completed this step. If you haven't, or if you enco
 
 You are all set!
 
-
 ## To Do List
 
-- Add a way to change RGB color and Multiwhite temperature.
-- Expand the compatible device list.
-- Resolve the issue where name changes through the app don't appear.
+- Add a way to change RGB color when API supports this functionality.
+- Resolve the issue where name changes through the app don't appear in Home Assistant.
 - Investigate the possibility to see states when using a physical button.
 
 ---
