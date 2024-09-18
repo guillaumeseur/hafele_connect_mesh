@@ -1,29 +1,34 @@
 {
-    "title": "Häfele Connect Mesh",
+"config": {
     "step": {
-      "user": {
-        "title": "Häfele Connect Mesh",
-        "description": "Please enter your Häfele Connect Mesh API key.",
+    "user": {
         "data": {
-          "api_key": "API Key"
-        }
-      },
-      "select_network": {
-        "title": "Select a Network",
-        "description": "Found networks: . If no networks are found, make sure everything is correctly set up in the Connect Mesh app.",
+        "api_token": "API Token"
+        },
+        "description": "Enter your Häfele Connect Mesh API token.\n\n{setup_info}",
+        "title": "Häfele Connect Mesh Setup"
+    },
+    "select_network": {
         "data": {
-          "network": "Network"
-        }
-      }
+        "network": "Network"
+        },
+        "description": "Select the network you want to add to Home Assistant.\n\n{select_info}",
+        "title": "Select Network"
+    },
+    "reauth": {
+        "description": "Please re-enter your API token to update your existing configuration.\n\n{setup_info}",
+        "title": "Reauthorize Häfele Connect Mesh"
+    }
     },
     "error": {
-      "cannot_connect": "Failed to connect. Please check your API key and try again.",
-      "no_networks": "No networks found. Make sure everything is correctly set up in the Connect Mesh app.",
-      "no_network_selected": "No network selected",
-      "unknown": "An unknown error occurred"
+    "cannot_connect": "Failed to connect",
+    "invalid_auth": "Invalid authentication",
+    "unknown": "Unexpected error"
     },
     "abort": {
-      "already_configured": "Häfele Connect Mesh is already configured."
+    "already_configured": "Device is already configured",
+    "no_networks": "No networks found for this account",
+    "reauth_successful": "Reauthorization was successful"
     }
-  }
-  
+}
+}
