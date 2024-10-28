@@ -5,7 +5,7 @@
           "description": "Please enter your Häfele Connect Mesh API key."
         },
         "select_network": {
-          "description": "Found networks: {networks}. If no networks are found, make sure everything is correctly set up in the Connect Mesh app."
+          "description": "Found networks:\n{networks}\nIf no networks are found, make sure everything is correctly set up in the Connect Mesh app."
         }
       },
       "error": {
@@ -16,4 +16,3 @@
       }
     }
   }
-  
