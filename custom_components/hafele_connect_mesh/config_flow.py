@@ -89,7 +89,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Create a bulleted list of networks
         networks_info = (
-            "\n• " + "\n• ".join([f"{net['name']}" for net in self.networks]) + "\n"
+            "\n\u2713 " + "\u2713 ".join([f"{net['name']}" for net in self.networks]) + "\n"
         )
 
         return self.async_show_form(
