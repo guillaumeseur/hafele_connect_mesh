@@ -87,13 +87,19 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Required("network"): vol.In({net["id"]: net["name"] for net in self.networks})
         })
 
+        # Create a bulleted list of networks
+        networks_info = (
+            "\n\u2713 " + "\u2713 ".join([f"{net['name']}" for net in self.networks]) + "\n"
+        )
+
         return self.async_show_form(
             step_id="select_network",
             data_schema=network_schema,
             errors=errors,
             description_placeholders={
-                "select_info": "Please select one network to add to Home Assistant."
-            }
+                "select_info": "Please select one network to add to Home Assistant.",
+                "networks": networks_info,
+            },
         )
 
     async def async_step_process_devices(self, user_input=None) -> FlowResult:
