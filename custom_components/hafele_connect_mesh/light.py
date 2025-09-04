@@ -111,23 +111,30 @@ class ConnectMeshLight(CoordinatorEntity, LightEntity):
         self._state = True
         self._pending_update = True
 
-        if ATTR_BRIGHTNESS in kwargs:
-            brightness = kwargs[ATTR_BRIGHTNESS]
-            self._brightness = brightness
-            self._last_known_brightness = brightness
-            await self._api_client.set_lightness(self._attr_unique_id, self._ha_to_api_brightness(brightness))
-        elif not self._brightness and self._last_known_brightness:
-            self._brightness = self._last_known_brightness
-            await self._api_client.set_lightness(self._attr_unique_id, self._ha_to_api_brightness(self._last_known_brightness))
-        else:
-            await self._api_client.set_power(self._attr_unique_id, True)
+        ha_brightness = kwargs.get(ATTR_BRIGHTNESS, self._brightness or self._last_known_brightness or 255)
+        self._brightness = ha_brightness
+        self._last_known_brightness = ha_brightness
+        lightness = self._ha_to_api_brightness(ha_brightness)  # 0.0..1.0
 
+        kelvin = None
         if ATTR_COLOR_TEMP in kwargs:
-            kelvin = color_temperature_mired_to_kelvin(kwargs[ATTR_COLOR_TEMP])
+            kelvin = int(color_temperature_mired_to_kelvin(kwargs[ATTR_COLOR_TEMP]))
             kelvin = max(MIN_KELVIN, min(MAX_KELVIN, kelvin))
             self._color_temp = kwargs[ATTR_COLOR_TEMP]
-            await self._api_client.set_temperature(self._attr_unique_id, kelvin)
 
+        if kelvin is not None:
+            await self._api_client.set_ctl(self._attr_unique_id, lightness, kelvin)
+        else:
+            if ATTR_BRIGHTNESS in kwargs:
+                await self._api_client.set_lightness(self._attr_unique_id, lightness)
+            elif not self._brightness and self._last_known_brightness:
+                await self._api_client.set_lightness(
+                    self._attr_unique_id,
+                    self._ha_to_api_brightness(self._last_known_brightness),
+                )
+            else:
+                await self._api_client.set_power(self._attr_unique_id, True)
+                
         if ATTR_HS_COLOR in kwargs:
             self._hs_color = kwargs[ATTR_HS_COLOR]
             hue, saturation = self._hs_color

@@ -170,3 +170,34 @@ class ConnectMeshAPI:
                 _LOGGER.error(f"Failed to set hue and saturation. Status code: {response.status}")
             else:
                 _LOGGER.debug(f"Set hue to {hue} and saturation to {saturation} for device {unique_id}")
+
+
+    async def set_ctl(
+        self,
+        unique_id: str,
+        lightness: float,
+        temperature: int,
+        acknowledged: bool = True,
+        retries: int = 0,
+        timeout_ms: int = 10000,
+    ):
+        """Set lightness + color temperature in one request."""
+        headers = {
+            "accept": "application/json",
+            "Authorization": f"Bearer {self.api_token}",
+            "Content-Type": "application/json",
+        }
+        data = {
+            "lightness": float(lightness),   # 0.0 .. 1.0
+            "temperature": int(temperature), # 2700 .. 5000
+            "uniqueId": unique_id,
+            "acknowledged": acknowledged,
+            "retries": retries,
+            "timeout_ms": timeout_ms,
+        }
+        async with self.session.put(f"{self.base_url}/devices/ctl", headers=headers, json=data) as response:
+            if response.status != 200:
+                body = await response.text()
+                _LOGGER.error(f"Failed to set CTL. Status code: {response.status} body={body}")
+            else:
+                _LOGGER.debug(f"Set CTL lightness={lightness} temperature={temperature} for {unique_id}")
