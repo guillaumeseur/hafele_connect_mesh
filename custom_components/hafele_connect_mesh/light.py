@@ -160,6 +160,8 @@ class ConnectMeshLight(CoordinatorEntity, LightEntity):
 
     def _update_attributes(self):
         """Update attributes based on the latest data from the coordinator."""
+        if self.coordinator.data is None:
+            return
         state = self.coordinator.data.get(self._attr_unique_id, {}).get("state", {})
         self._state = state.get("power", False)
         
@@ -170,13 +172,13 @@ class ConnectMeshLight(CoordinatorEntity, LightEntity):
 
         if "temperature" in state:
             self._color_temp = state["temperature"]
-            self._attr_supported_color_modes = {ColorMode.COLOR_TEMP, ColorMode.BRIGHTNESS}
+            self._attr_supported_color_modes = {ColorMode.COLOR_TEMP}
             self._attr_color_mode = ColorMode.COLOR_TEMP
         elif "hue" in state and "saturation" in state:
             hue = state["hue"] / 65535 * 360
             saturation = state["saturation"] / 65535 * 100
             self._hs_color = (hue, saturation)
-            self._attr_supported_color_modes = {ColorMode.HS, ColorMode.BRIGHTNESS}
+            self._attr_supported_color_modes = {ColorMode.HS}
             self._attr_color_mode = ColorMode.HS
         elif "lightness" in state:
             self._attr_supported_color_modes = {ColorMode.BRIGHTNESS}
