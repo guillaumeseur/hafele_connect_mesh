@@ -8,7 +8,7 @@ import asyncio
 
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
-    ATTR_COLOR_TEMP,
+    ATTR_COLOR_TEMP_KELVIN,
     ATTR_HS_COLOR,
     ColorMode,
     LightEntity,
@@ -17,10 +17,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.entity import DeviceInfo
-from homeassistant.util.color import (
-    color_temperature_kelvin_to_mired,
-    color_temperature_mired_to_kelvin,
-)
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
@@ -70,8 +66,8 @@ class ConnectMeshLight(CoordinatorEntity, LightEntity):
         self._attr_name = device["name"]
         self._attr_supported_color_modes = {ColorMode.BRIGHTNESS}
         self._attr_color_mode = ColorMode.BRIGHTNESS
-        self._attr_min_mireds = color_temperature_kelvin_to_mired(MAX_KELVIN)
-        self._attr_max_mireds = color_temperature_kelvin_to_mired(MIN_KELVIN)
+        self._attr_min_color_temp_kelvin = MIN_KELVIN
+        self._attr_max_color_temp_kelvin = MAX_KELVIN
         self._state = None
         self._brightness = None
         self._color_temp = None
@@ -97,8 +93,8 @@ class ConnectMeshLight(CoordinatorEntity, LightEntity):
         return self._brightness
 
     @property
-    def color_temp(self) -> int | None:
-        """Return the CT color value in mireds."""
+    def color_temp_kelvin(self) -> int | None:
+        """Return the CT color value in Kelvin."""
         return self._color_temp
 
     @property
@@ -117,10 +113,9 @@ class ConnectMeshLight(CoordinatorEntity, LightEntity):
         lightness = self._ha_to_api_brightness(ha_brightness)  # 0.0..1.0
 
         kelvin = None
-        if ATTR_COLOR_TEMP in kwargs:
-            kelvin = int(color_temperature_mired_to_kelvin(kwargs[ATTR_COLOR_TEMP]))
-            kelvin = max(MIN_KELVIN, min(MAX_KELVIN, kelvin))
-            self._color_temp = kwargs[ATTR_COLOR_TEMP]
+        if ATTR_COLOR_TEMP_KELVIN in kwargs:
+            kelvin = max(MIN_KELVIN, min(MAX_KELVIN, int(kwargs[ATTR_COLOR_TEMP_KELVIN])))
+            self._color_temp = kelvin
 
         if kelvin is not None:
             await self._api_client.set_ctl(self._attr_unique_id, lightness, kelvin)
@@ -174,7 +169,7 @@ class ConnectMeshLight(CoordinatorEntity, LightEntity):
                 self._last_known_brightness = self._brightness
 
         if "temperature" in state:
-            self._color_temp = color_temperature_kelvin_to_mired(state["temperature"])
+            self._color_temp = state["temperature"]
             self._attr_supported_color_modes = {ColorMode.COLOR_TEMP, ColorMode.BRIGHTNESS}
             self._attr_color_mode = ColorMode.COLOR_TEMP
         elif "hue" in state and "saturation" in state:
