@@ -162,7 +162,8 @@ class ConnectMeshLight(CoordinatorEntity, LightEntity):
         """Update attributes based on the latest data from the coordinator."""
         if self.coordinator.data is None:
             return
-        state = self.coordinator.data.get(self._attr_unique_id, {}).get("state", {})
+        device_data = self.coordinator.data.get(self._attr_unique_id) or {}
+        state = device_data.get("state", {})
         self._state = state.get("power", False)
         
         if "lightness" in state:
