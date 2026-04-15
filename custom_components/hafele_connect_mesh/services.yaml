@@ -1,0 +1,10 @@
+get_device_status:
+  name: Get Device Status
+  description: Retrieves the current status of a Häfele Connect Mesh device.
+  fields:
+    device_id:
+      name: Device ID
+      description: The ID of the device to query.
+      required: true
+      selector:
+        text:
