@@ -43,7 +43,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         _LOGGER,
         name="light",
         update_method=async_update_data,
-        update_interval=timedelta(seconds=10),  # Reduced update interval
+        update_interval=timedelta(seconds=30),
     )
 
     await coordinator.async_refresh()
@@ -164,6 +164,8 @@ class ConnectMeshLight(CoordinatorEntity, LightEntity):
             return
         device_data = self.coordinator.data.get(self._attr_unique_id) or {}
         state = device_data.get("state", {})
+        if not state:
+            return
         self._state = state.get("power", False)
         
         if "lightness" in state:
