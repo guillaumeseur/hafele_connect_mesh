@@ -29,6 +29,16 @@ _LOGGER = logging.getLogger(__name__)
 MIN_KELVIN = 2700
 MAX_KELVIN = 5000
 
+# Static color mode per device type as determined by the config flow.
+# HomeKit builds its accessories from supported_color_modes at startup, so
+# these must not depend on whether the first status poll has succeeded yet.
+DEVICE_TYPE_COLOR_MODES = {
+    "temperature": ColorMode.COLOR_TEMP,
+    "rgb": ColorMode.HS,
+    "brightness": ColorMode.BRIGHTNESS,
+    "switch": ColorMode.ONOFF,
+}
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     """Set up the Connect Mesh light platform."""
     api_client = hass.data[DOMAIN][entry.entry_id]["api_client"]
@@ -64,8 +74,9 @@ class ConnectMeshLight(CoordinatorEntity, LightEntity):
         self._device = device
         self._attr_unique_id = device["uniqueId"]
         self._attr_name = device["name"]
-        self._attr_supported_color_modes = {ColorMode.BRIGHTNESS}
-        self._attr_color_mode = ColorMode.BRIGHTNESS
+        color_mode = DEVICE_TYPE_COLOR_MODES.get(device.get("type"), ColorMode.BRIGHTNESS)
+        self._attr_supported_color_modes = {color_mode}
+        self._attr_color_mode = color_mode
         self._attr_min_color_temp_kelvin = MIN_KELVIN
         self._attr_max_color_temp_kelvin = MAX_KELVIN
         self._state = None
@@ -74,6 +85,11 @@ class ConnectMeshLight(CoordinatorEntity, LightEntity):
         self._hs_color = None
         self._last_known_brightness = None
         self._pending_update = False
+
+    async def async_added_to_hass(self) -> None:
+        """Apply the initial coordinator data when the entity is added."""
+        await super().async_added_to_hass()
+        self._update_attributes()
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -175,20 +191,10 @@ class ConnectMeshLight(CoordinatorEntity, LightEntity):
 
         if "temperature" in state:
             self._color_temp = state["temperature"]
-            self._attr_supported_color_modes = {ColorMode.COLOR_TEMP}
-            self._attr_color_mode = ColorMode.COLOR_TEMP
-        elif "hue" in state and "saturation" in state:
+        if "hue" in state and "saturation" in state:
             hue = state["hue"] / 65535 * 360
             saturation = state["saturation"] / 65535 * 100
             self._hs_color = (hue, saturation)
-            self._attr_supported_color_modes = {ColorMode.HS}
-            self._attr_color_mode = ColorMode.HS
-        elif "lightness" in state:
-            self._attr_supported_color_modes = {ColorMode.BRIGHTNESS}
-            self._attr_color_mode = ColorMode.BRIGHTNESS
-        else:
-            self._attr_supported_color_modes = {ColorMode.ONOFF}
-            self._attr_color_mode = ColorMode.ONOFF
 
     async def _async_update_ha_state(self):
         """Update Home Assistant state and clear pending update flag."""
