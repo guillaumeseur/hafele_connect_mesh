@@ -8,7 +8,7 @@ import asyncio
 
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
-    ATTR_COLOR_TEMP,
+    ATTR_COLOR_TEMP_KELVIN,
     ATTR_HS_COLOR,
     ColorMode,
     LightEntity,
@@ -17,10 +17,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.entity import DeviceInfo
-from homeassistant.util.color import (
-    color_temperature_kelvin_to_mired,
-    color_temperature_mired_to_kelvin,
-)
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
@@ -32,6 +28,16 @@ _LOGGER = logging.getLogger(__name__)
 
 MIN_KELVIN = 2700
 MAX_KELVIN = 5000
+
+# Static color mode per device type as determined by the config flow.
+# HomeKit builds its accessories from supported_color_modes at startup, so
+# these must not depend on whether the first status poll has succeeded yet.
+DEVICE_TYPE_COLOR_MODES = {
+    "temperature": ColorMode.COLOR_TEMP,
+    "rgb": ColorMode.HS,
+    "brightness": ColorMode.BRIGHTNESS,
+    "switch": ColorMode.ONOFF,
+}
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     """Set up the Connect Mesh light platform."""
@@ -47,7 +53,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         _LOGGER,
         name="light",
         update_method=async_update_data,
-        update_interval=timedelta(seconds=10),  # Reduced update interval
+        update_interval=timedelta(seconds=30),
     )
 
     await coordinator.async_refresh()
@@ -68,16 +74,22 @@ class ConnectMeshLight(CoordinatorEntity, LightEntity):
         self._device = device
         self._attr_unique_id = device["uniqueId"]
         self._attr_name = device["name"]
-        self._attr_supported_color_modes = {ColorMode.BRIGHTNESS}
-        self._attr_color_mode = ColorMode.BRIGHTNESS
-        self._attr_min_mireds = color_temperature_kelvin_to_mired(MAX_KELVIN)
-        self._attr_max_mireds = color_temperature_kelvin_to_mired(MIN_KELVIN)
+        color_mode = DEVICE_TYPE_COLOR_MODES.get(device.get("type"), ColorMode.BRIGHTNESS)
+        self._attr_supported_color_modes = {color_mode}
+        self._attr_color_mode = color_mode
+        self._attr_min_color_temp_kelvin = MIN_KELVIN
+        self._attr_max_color_temp_kelvin = MAX_KELVIN
         self._state = None
         self._brightness = None
         self._color_temp = None
         self._hs_color = None
         self._last_known_brightness = None
         self._pending_update = False
+
+    async def async_added_to_hass(self) -> None:
+        """Apply the initial coordinator data when the entity is added."""
+        await super().async_added_to_hass()
+        self._update_attributes()
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -97,8 +109,8 @@ class ConnectMeshLight(CoordinatorEntity, LightEntity):
         return self._brightness
 
     @property
-    def color_temp(self) -> int | None:
-        """Return the CT color value in mireds."""
+    def color_temp_kelvin(self) -> int | None:
+        """Return the CT color value in Kelvin."""
         return self._color_temp
 
     @property
@@ -111,23 +123,29 @@ class ConnectMeshLight(CoordinatorEntity, LightEntity):
         self._state = True
         self._pending_update = True
 
-        if ATTR_BRIGHTNESS in kwargs:
-            brightness = kwargs[ATTR_BRIGHTNESS]
-            self._brightness = brightness
-            self._last_known_brightness = brightness
-            await self._api_client.set_lightness(self._attr_unique_id, self._ha_to_api_brightness(brightness))
-        elif not self._brightness and self._last_known_brightness:
-            self._brightness = self._last_known_brightness
-            await self._api_client.set_lightness(self._attr_unique_id, self._ha_to_api_brightness(self._last_known_brightness))
+        ha_brightness = kwargs.get(ATTR_BRIGHTNESS, self._brightness or self._last_known_brightness or 255)
+        self._brightness = ha_brightness
+        self._last_known_brightness = ha_brightness
+        lightness = self._ha_to_api_brightness(ha_brightness)  # 0.0..1.0
+
+        kelvin = None
+        if ATTR_COLOR_TEMP_KELVIN in kwargs:
+            kelvin = max(MIN_KELVIN, min(MAX_KELVIN, int(kwargs[ATTR_COLOR_TEMP_KELVIN])))
+            self._color_temp = kelvin
+
+        if kelvin is not None:
+            await self._api_client.set_ctl(self._attr_unique_id, lightness, kelvin)
         else:
-            await self._api_client.set_power(self._attr_unique_id, True)
-
-        if ATTR_COLOR_TEMP in kwargs:
-            kelvin = color_temperature_mired_to_kelvin(kwargs[ATTR_COLOR_TEMP])
-            kelvin = max(MIN_KELVIN, min(MAX_KELVIN, kelvin))
-            self._color_temp = kwargs[ATTR_COLOR_TEMP]
-            await self._api_client.set_temperature(self._attr_unique_id, kelvin)
-
+            if ATTR_BRIGHTNESS in kwargs:
+                await self._api_client.set_lightness(self._attr_unique_id, lightness)
+            elif not self._brightness and self._last_known_brightness:
+                await self._api_client.set_lightness(
+                    self._attr_unique_id,
+                    self._ha_to_api_brightness(self._last_known_brightness),
+                )
+            else:
+                await self._api_client.set_power(self._attr_unique_id, True)
+                
         if ATTR_HS_COLOR in kwargs:
             self._hs_color = kwargs[ATTR_HS_COLOR]
             hue, saturation = self._hs_color
@@ -158,7 +176,12 @@ class ConnectMeshLight(CoordinatorEntity, LightEntity):
 
     def _update_attributes(self):
         """Update attributes based on the latest data from the coordinator."""
-        state = self.coordinator.data.get(self._attr_unique_id, {}).get("state", {})
+        if self.coordinator.data is None:
+            return
+        device_data = self.coordinator.data.get(self._attr_unique_id) or {}
+        state = device_data.get("state", {})
+        if not state:
+            return
         self._state = state.get("power", False)
         
         if "lightness" in state:
@@ -167,21 +190,11 @@ class ConnectMeshLight(CoordinatorEntity, LightEntity):
                 self._last_known_brightness = self._brightness
 
         if "temperature" in state:
-            self._color_temp = color_temperature_kelvin_to_mired(state["temperature"])
-            self._attr_supported_color_modes = {ColorMode.COLOR_TEMP, ColorMode.BRIGHTNESS}
-            self._attr_color_mode = ColorMode.COLOR_TEMP
-        elif "hue" in state and "saturation" in state:
+            self._color_temp = state["temperature"]
+        if "hue" in state and "saturation" in state:
             hue = state["hue"] / 65535 * 360
             saturation = state["saturation"] / 65535 * 100
             self._hs_color = (hue, saturation)
-            self._attr_supported_color_modes = {ColorMode.HS, ColorMode.BRIGHTNESS}
-            self._attr_color_mode = ColorMode.HS
-        elif "lightness" in state:
-            self._attr_supported_color_modes = {ColorMode.BRIGHTNESS}
-            self._attr_color_mode = ColorMode.BRIGHTNESS
-        else:
-            self._attr_supported_color_modes = {ColorMode.ONOFF}
-            self._attr_color_mode = ColorMode.ONOFF
 
     async def _async_update_ha_state(self):
         """Update Home Assistant state and clear pending update flag."""

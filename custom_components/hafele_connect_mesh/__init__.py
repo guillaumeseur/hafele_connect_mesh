@@ -2,18 +2,17 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 import aiohttp
 
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = ["light"]
+PLATFORMS = [Platform.LIGHT]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Häfele Connect Mesh from a config entry."""
@@ -26,26 +25,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     session = async_get_clientsession(hass)
     api_client = ConnectMeshAPI(session, entry.data["api_token"])
-    
-    async def async_update_data():
-        """Fetch data from API."""
-        devices = entry.data["devices"]
-        return {device["uniqueId"]: await api_client.get_device_status(device["uniqueId"]) for device in devices}
-
-    coordinator = DataUpdateCoordinator(
-        hass,
-        _LOGGER,
-        name="hafele_connect_mesh",
-        update_method=async_update_data,
-        update_interval=timedelta(seconds=30),
-    )
-
-    await coordinator.async_config_entry_first_refresh()
 
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {
         "api_client": api_client,
-        "coordinator": coordinator,
         "devices": entry.data["devices"]
     }
     
@@ -170,3 +153,34 @@ class ConnectMeshAPI:
                 _LOGGER.error(f"Failed to set hue and saturation. Status code: {response.status}")
             else:
                 _LOGGER.debug(f"Set hue to {hue} and saturation to {saturation} for device {unique_id}")
+
+
+    async def set_ctl(
+        self,
+        unique_id: str,
+        lightness: float,
+        temperature: int,
+        acknowledged: bool = True,
+        retries: int = 0,
+        timeout_ms: int = 10000,
+    ):
+        """Set lightness + color temperature in one request."""
+        headers = {
+            "accept": "application/json",
+            "Authorization": f"Bearer {self.api_token}",
+            "Content-Type": "application/json",
+        }
+        data = {
+            "lightness": float(lightness),   # 0.0 .. 1.0
+            "temperature": int(temperature), # 2700 .. 5000
+            "uniqueId": unique_id,
+            "acknowledged": acknowledged,
+            "retries": retries,
+            "timeout_ms": timeout_ms,
+        }
+        async with self.session.put(f"{self.base_url}/devices/ctl", headers=headers, json=data) as response:
+            if response.status != 200:
+                body = await response.text()
+                _LOGGER.error(f"Failed to set CTL. Status code: {response.status} body={body}")
+            else:
+                _LOGGER.debug(f"Set CTL lightness={lightness} temperature={temperature} for {unique_id}")
